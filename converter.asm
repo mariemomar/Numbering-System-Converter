@@ -1,116 +1,168 @@
 .data 
-	prompt1: .asciiz "Enter the current base (2-16): "
-	prompt2: .asciiz "Enter the number: "
-	prompt3: .asciiz "Enter the new base (2-16):"
-	invalid_base_message: .asciiz "Invalid base. Please enter a base between 2 and 16.\n"
-	same_base_message: .asciiz "The number is already in the new base \n"
-	input_buffer: .space 32
-	output_buffer: .space 32
-	reverse_temp: .space 32
-	new_base_message : .asciiz "The number in the new base is : "
+    prompt1: .asciiz "Enter the current base (2-16): "
+    prompt2: .asciiz "Enter the number: "
+    prompt3: .asciiz "Enter the new base (2-16): "
+    invalid_base_message: .asciiz "Invalid base. Please enter a base between 2 and 16.\n"
+    same_base_message: .asciiz "The number is already in the new base.\n"
+    invalid_number_message: .asciiz "The number is not valid for the specified base.\n"
+    input_buffer: .space 32
+    output_buffer: .space 32
+    reverse_temp: .space 32
+    new_base_message: .asciiz "The number in the new base is: "
+    space: .asciiz " "
 .text 
 
 main: 
-	li $v0 , 4
-	la $a0 , prompt1
-	syscall
-	
-	li $v0 , 5 
-	syscall 
-	move $t0 , $v0 # store the base 1 at t0
-	
-	li $v0 , 4
-	la $a0 , prompt2
-	syscall
+    # Prompt for base1
+    li $v0, 4
+    la $a0, prompt1
+    syscall
+    
+    li $v0, 5 
+    syscall 
+    move $t0, $v0 # Store base1 in $t0
+    
+    # Prompt for the number
+    li $v0, 4
+    la $a0, prompt2
+    syscall
 
-    	li $v0, 8
-    	la $a0, input_buffer  # a0 has the location of the buffer
-    	li $a1, 32            # max char to read
-    	syscall
+    li $v0, 8
+    la $a0, input_buffer  # $a0 points to the input buffer
+    li $a1, 32            # Max chars to read
+    syscall
 
     # Null-terminate the input string
-    la $t2, input_buffer  # Pointer to the start of the buffer
+    la $t2, input_buffer  # Pointer to start of buffer
+null_terminate:
+    lb $t3, 0($t2)        # Load current character
+    beqz $t3, done_null   # Exit loop if null terminator found
+    beq $t3, '\n', replace # Replace newline with null
+    addi $t2, $t2, 1      # Move to the next character
+    j null_terminate
 
-	null_terminate:
-    	 lb $t3, 0($t2)        # Load the current character
-   	 beqz $t3, done_null   # Exit loop if null terminator is found
-    	 beq $t3, '\n', replace # If newline is found, replace it with null
-    	 addi $t2, $t2, 1      # Move to the next character
-    	 j null_terminate
+replace:
+    sb $zero, 0($t2)
+    j done_null
 
-       replace:
-   	 sb $zero, 0($t2)
-    	 j done_null
+done_null:
 
-	done_null:
+    # Prompt for base2
+    li $v0, 4
+    la $a0, prompt3
+    syscall
 
+    li $v0, 5
+    syscall
+    move $t1, $v0 # Store base2 in $t1
 
-	li $v0 , 4
-	la $a0 , prompt3
-	syscall
+    # Ensure base1 (in $t0) is within 2–16
+    blt $t0, 2, invalid_base
+    bgt $t0, 16, invalid_base
 
-	li $v0 , 5
-	syscall
-	move $t1 , $v0 # store the base 2 at t1
+    # Ensure base2 (in $t1) is within 2–16
+    blt $t1, 2, invalid_base
+    bgt $t1, 16, invalid_base
 
-	# Ensure base1 (in $t0) is within 2–16
-	blt $t0, 2, invalid_base
-	bgt $t0, 16, invalid_base
+    b continue
 
-	# Ensure base2 (in $t1) is within 2–16
-	blt $t1, 2, invalid_base
-	bgt $t1, 16, invalid_base
+invalid_base:
+    li $v0, 4
+    la $a0, invalid_base_message
+    syscall
+    li $v0, 10
+    syscall
+#   --------------------------------------------------------------------
+continue:
 
-	# Continue normal processing
-	b continue
+    # Validate the number for base1
+    la $a0, input_buffer   # Address of the number string
+    move $a1, $t0          # Base1
+    #jal validateNumber     # Call validateNumber
+    j validateNumber
+###
+continue2:
+	
+	
+	
+    # Check if base1 == base2
+    beq $t0, $t1, same_base
+    b check_if_base1_10
 
-	invalid_base:
-	li $v0, 4
-	la $a0, invalid_base_message
-	syscall
-	li $v0, 10
-	syscall
+same_base:
+    li $v0, 4
+    la $a0, same_base_message
+    syscall
+    li $v0, 10
+    syscall
 
-	continue:
+check_if_base1_10:
+    beq $t0, 10, showDecimal
 
-	beq $t0 , $t1 , same_base
+showDecimal:
+    la $a0, input_buffer  # Number string
+    move $a1, $t1         # New base
+    la $a2, output_buffer # Result
+    jal decimalToAnyBase
 
-	b check_if_base1_10
+    # Print the result
+    li $v0, 4
+    la $a0, new_base_message
+    syscall
 
-	same_base:
+    li $v0, 4
+    la $a0, output_buffer
+    syscall
 
-	li $v0 , 4
-	la $a0, same_base_message
-	syscall
-	li $v0 , 10
-	syscall
+    li $v0, 10
+    syscall
 
-	#----------------------------
-	#the validation function here
-	# ---------------------------
+# ---------------------------------
+# Validation Function
+# ---------------------------------
+validateNumber:
+    # a0 = number (string)
+    # a1 = base
 
-	check_if_base1_10:
-	beq $t0 , 10 , showDecimal
+    la $t6, input_buffer  # Pointer to the number string
+validate_loop:
+    lb $t7, 0($t6)          # Load current character
+    beqz $t7, validate_done # End of string, number is valid
 
-	showDecimal:
+    # Convert character to numeric value
+    li $t2, '0'
+    li $t3, '9'
+    blt $t7, $t2, check_alpha
+    bgt $t7, $t3, check_alpha
+    sub $t4, $t7, $t2       # $t4 = digit - '0'
+    b validate_value
 
-	la $a0, input_buffer  # string number
-	move $a1, $t1         # pass base2
-	la $a2 , output_buffer # the result
-	jal decimalToAnyBase
+check_alpha:
+    li $t2, 'A'
+    li $t3, 'F'
+    blt $t7, $t2, invalid_number
+    bgt $t7, $t3, invalid_number
+    sub $t4, $t7, $t2       # $t4 = letter - 'A'
+    addi $t4, $t4, 10       # Add 10 for A–F
 
+validate_value:
+    # Check if value is valid for the base
+    bge $t4, $a1, invalid_number
 
-	# Print the result
-   	li $v0, 4
-    	la $a0, new_base_message
-    	syscall
+    # Move to the next character
+    addi $t6, $t6, 1
+    j validate_loop
 
-    	li $v0, 4
-    	la $a0, output_buffer
-    	syscall
+invalid_number:
+    li $v0, 4
+    la $a0, invalid_number_message
+    syscall
+    li $v0, 10
+    syscall
 
-    	li $v0, 10
-    	syscall
+validate_done:
+    j continue2
+
 
 #####################################################################
 
@@ -172,7 +224,7 @@ decimalToAnyBase:
     	store_char:
     	sb $t7, 0($a2)      # Store the character in the result buffer
     	addi $a2, $a2, 1     # Increment result buffer pointer
-    	addi , $t6 , $t6 , 1 # keep the length of the string
+    	addi $t6 , $t6 , 1 # keep the length of the string
 
     	# Update decimal
     	mflo $t2            # decimal / base
@@ -211,5 +263,3 @@ decimalToAnyBase:
     	jr $ra
 
 ######################################################################################
-
-	
