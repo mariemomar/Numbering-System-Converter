@@ -55,13 +55,13 @@ done_null:
 
     li $v0, 5
     syscall
-    move $s1, $v0 # Store base2 in $t1
+    move $s1, $v0 # Store base2 in $s1
 
     # Ensure base1 (in $t0) is within 2–16
     blt $t0, 2, invalid_base
     bgt $t0, 16, invalid_base
 
-    # Ensure base2 (in $t1) is within 2–16
+    # Ensure base2 (in $s1) is within 2–16
     blt $s1, 2, invalid_base
     bgt $s1, 16, invalid_base
 
