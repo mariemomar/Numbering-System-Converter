@@ -8,6 +8,7 @@
     input_buffer: .space 32
     output_buffer: .space 32
     reverse_temp: .space 32
+    result_str:     .space 32    
     new_base_message: .asciiz "The number in the new base is: "
     space: .asciiz " "
 .text 
@@ -54,15 +55,15 @@ done_null:
 
     li $v0, 5
     syscall
-    move $t1, $v0 # Store base2 in $t1
+    move $s1, $v0 # Store base2 in $t1
 
     # Ensure base1 (in $t0) is within 2–16
     blt $t0, 2, invalid_base
     bgt $t0, 16, invalid_base
 
     # Ensure base2 (in $t1) is within 2–16
-    blt $t1, 2, invalid_base
-    bgt $t1, 16, invalid_base
+    blt $s1, 2, invalid_base
+    bgt $s1, 16, invalid_base
 
     b continue
 
@@ -74,7 +75,6 @@ invalid_base:
     syscall
 #   --------------------------------------------------------------------
 continue:
-
     # Validate the number for base1
     la $a0, input_buffer   # Address of the number string
     move $a1, $t0          # Base1
@@ -82,12 +82,9 @@ continue:
     j validateNumber
 ###
 continue2:
-	
-	
-	
     # Check if base1 == base2
-    beq $t0, $t1, same_base
-    b check_if_base1_10
+    beq $t0, $s1, same_base
+    b showDecimal
 
 same_base:
     li $v0, 4
@@ -96,12 +93,11 @@ same_base:
     li $v0, 10
     syscall
 
-check_if_base1_10:
-    beq $t0, 10, showDecimal
-
 showDecimal:
-    la $a0, input_buffer  # Number string
-    move $a1, $t1         # New base
+    jal convert_to_decimal
+    jal int_to_string
+    la $a0, result_str  # String From convert_to_decimal
+    move $a1, $s1         # New base
     la $a2, output_buffer # Result
     jal decimalToAnyBase
 
@@ -117,7 +113,6 @@ showDecimal:
     li $v0, 10
     syscall
 
-# ---------------------------------
 # Validation Function
 # ---------------------------------
 validateNumber:
@@ -163,13 +158,10 @@ invalid_number:
 validate_done:
     j continue2
 
-
 #####################################################################
 
 decimalToAnyBase:
-
 	# a0 = number (string) , a1 = new base , a2 = result (string)
-
 	li $t2, 0  # store value (decimal)
 	li $t3 , 0 # index for the output buffer  i
 	li $t4 , 10    # multiplier
@@ -183,14 +175,11 @@ decimalToAnyBase:
 	add $t2 , $t2 , $t5  # add the value of the char
 
 	addi $a0 , $a0 , 1  #increase the iterator of the string number
-
 	j convert_to_int
-
 
 	end_loop:
 	li $v0 , 10
 	syscall
-
 
 	converting_to_new_base:
 	li $t6 , 0   #index on the result string i
@@ -233,14 +222,11 @@ decimalToAnyBase:
 
     	# t6 the length of the string , a2 = the string
 
-
     	 b reverse_result
     	# Reverse the result string
     	reverse_result:
    	 sub $a2, $a2, $t6  # Adjust $a2 to point to the start of the buffer
     	b reverse_string # Call reversal function
-
-
 
 	reverse_string:
     	sub $t8, $t6, 1        # $t8 = size of the string - 1 (index of last char)
@@ -263,3 +249,88 @@ decimalToAnyBase:
     	jr $ra
 
 ######################################################################################
+# Convert to Decimal Function
+convert_to_decimal:
+    li $t1, 0                  # $t1 = 0 
+    li $t2, 0                  # $t2 = 0 
+
+convert_loop:
+    lb $t3, input_buffer($t2)  
+
+    beqz $t3, done_conversion  # If byte is 0 then it's done
+
+    # check if between '0' and '9'
+    li $t4, 48                 
+    li $t5, 57                 
+    blt $t3, $t4, check_alpha2  # not int check if alpha
+    bgt $t3, $t5, check_alpha2  # not int check if alpha
+
+    # Digit to value because the input is a string so we subtract char '0' from it 
+    sub $t3, $t3, $t4          # $t3 = char - '0' 
+
+    j process_digit
+
+check_alpha2:
+    # check if between 'A' and 'F'
+    li $t4, 65                 
+    li $t5, 70              
+    blt $t3, $t4, done_conversion # if char < 'A' then it's done
+    bgt $t3, $t5, done_conversion  # if char > 'F' then it's done
+
+    # convert letter to value
+    sub $t3, $t3, $t4          # $t3 = character - 'A' + 10
+    addi $t3, $t3, 10
+
+process_digit:
+    mul $t1, $t1, $t0          # $t1 = $t1 * base
+    add $t1, $t1, $t3          # $t1 = $t1 + digit value
+
+    addi $t2, $t2, 1           # move to next index
+    j convert_loop
+
+done_conversion:
+    jr $ra                     
+
+# Convert integer to string
+int_to_string:
+    # $t1 = integer to convert, $a0 = result buffer
+    li $t2, 0                 
+    li $t3, 10                
+
+convert_digits:
+    divu $t4, $t1, $t3         # divide $t1/10, result in $t4, remainder in $hi register
+    mfhi $t5                   # get the remainder (next digit)
+    addi $t5, $t5, 48          # convert to ASCII
+    sb $t5, result_str($t2)    # append char to result_str
+    addi $t2, $t2, 1           # result index ++
+    move $t1, $t4              # t1 = quotient
+
+    bnez $t1, convert_digits   # repeat if quotient is not zero
+
+    # Null-terminate the string
+    sb $zero, result_str($t2)
+
+    # reverse string
+    li $t6, 0                  # index 0
+    sub $t7, $t2, 1            # last index
+
+reverse_string2:
+    lb $t8, result_str($t6)   
+    lb $t9, result_str($t7)   
+    sb $t9, result_str($t6)    # swap begin with end
+    sb $t8, result_str($t7)    # swap end with begin
+    addi $t6, $t6, 1           # index0 ++
+    subi $t7, $t7, 1           # last index --
+    blt $t6, $t7, reverse_string2  # repeat
+	
+    # Clear used registers to avoid conflicts with other function
+    move $t2, $zero  
+    move $t3, $zero 
+    move $t4, $zero  
+    move $t5, $zero 
+    move $t6, $zero  
+    move $t7, $zero  
+    move $t8, $zero 
+    move $t9, $zero  
+
+    jr $ra                    
